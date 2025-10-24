@@ -14,7 +14,7 @@ from sgr_deep_research.api.models import (
     ClarificationRequest,
     HealthResponse,
 )
-from sgr_deep_research.core.agents import BaseAgent
+from sgr_deep_research.core.agents import BaseAgent, SGRInfiniteAutoToolCallingAgent
 from sgr_deep_research.core.models import AgentStatesEnum
 
 logger = logging.getLogger(__name__)
@@ -115,17 +115,49 @@ async def create_chat_completion(request: ChatCompletionRequest):
     if not request.stream:
         raise HTTPException(status_code=501, detail="Only streaming responses are supported. Set 'stream=true'")
 
-    # Check if this is a clarification request for an existing agent
+    # Check if this is a continuation of existing agent conversation
     if (
         request.model
         and isinstance(request.model, str)
         and _is_agent_id(request.model)
         and request.model in agents_storage
-        and agents_storage[request.model]._context.state == AgentStatesEnum.WAITING_FOR_CLARIFICATION
     ):
-        return await provide_clarification(
-            agent_id=request.model,
-            request=ClarificationRequest(clarifications=extract_user_content_from_messages(request.messages)),
+        agent = agents_storage[request.model]
+        
+        # Handle continuation for infinite agents (priority over clarification)
+        if isinstance(agent, SGRInfiniteAutoToolCallingAgent):
+            user_message = extract_user_content_from_messages(request.messages)
+            logger.info(f"💬 Continuing infinite agent {agent.id} with message: {user_message[:100]}...")
+            
+            # Continue conversation
+            await agent.continue_conversation(user_message)
+            
+            # If user didn't request stop, trigger clarification event to continue execution
+            if not agent.user_requested_stop:
+                agent._context.clarification_received.set()
+            
+            return StreamingResponse(
+                agent.streaming_generator.stream(),
+                media_type="text/plain",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "X-Agent-ID": str(agent.id),
+                    "X-Agent-Model": agent.name,
+                },
+            )
+        
+        # Handle clarification for non-infinite agents
+        if agent._context.state == AgentStatesEnum.WAITING_FOR_CLARIFICATION:
+            return await provide_clarification(
+                agent_id=request.model,
+                request=ClarificationRequest(clarifications=extract_user_content_from_messages(request.messages)),
+            )
+        
+        # If agent exists but is not infinite and not waiting for clarification
+        raise HTTPException(
+            status_code=400,
+            detail=f"Agent {request.model} exists but cannot continue conversation. State: {agent._context.state}",
         )
 
     try:

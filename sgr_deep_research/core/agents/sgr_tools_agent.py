@@ -129,7 +129,8 @@ class SGRToolCallingResearchAgent(SGRResearchAgent):
             final_content = completion.choices[0].message.content or "Task completed successfully"
             tool = FinalAnswerTool(
                 reasoning="Agent decided to complete the task",
-                completed_steps=[final_content],
+                completed_steps=["Provided response without tool call"],
+                answer=final_content,
                 status=AgentStatesEnum.COMPLETED,
             )
         if not isinstance(tool, BaseTool):

@@ -47,3 +47,17 @@ class PromptLoader:
     def get_clarification_template(cls, clarifications: str) -> str:
         template = cls._load_prompt_file("clarification_response.txt")
         return template.format(clarifications=clarifications, current_date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    @classmethod
+    def get_infinite_system_prompt(cls, available_tools: list[BaseTool]) -> str:
+        """Get system prompt for infinite conversation mode."""
+        template = cls._load_prompt_file("infinite_system_prompt.txt")
+        available_tools_str_list = [
+            f"{i}. {tool.tool_name}: {tool.description}" for i, tool in enumerate(available_tools, start=1)
+        ]
+        try:
+            return template.format(
+                available_tools="\n".join(available_tools_str_list),
+            )
+        except KeyError as e:
+            raise KeyError(f"Missing placeholder in infinite system prompt template: {e}") from e
