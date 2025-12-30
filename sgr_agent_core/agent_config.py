@@ -36,6 +36,7 @@ class GlobalConfig(BaseSettings, AgentConfig, Definitions):
     @classmethod
     def from_yaml(cls, yaml_path: str) -> Self:
         yaml_path = Path(yaml_path)
+        sys.path.append(str(yaml_path.resolve().parent))
         if not yaml_path.exists():
             raise FileNotFoundError(f"Configuration file not found: {yaml_path}")
         config_data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
