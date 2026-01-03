@@ -1,4 +1,4 @@
-# Research with Messages
+# Research with Images
 
 Example demonstrating the use of `task_messages` with multimodal content in OpenAI format.
 
